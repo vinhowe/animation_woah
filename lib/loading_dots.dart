@@ -18,12 +18,13 @@ Vector2 rotateVector(double radians) {}
 
 class LoadingDotsPainter extends CustomPainter {
   final List<PhysicsDot> dotPositions;
+  final DotSystem dotSystem;
   final ChangeNotifier drawTick;
   final Color movingColor;
   final Color idleColor;
   final double radius;
 
-  LoadingDotsPainter(this.dotPositions,
+  LoadingDotsPainter(this.dotPositions, this.dotSystem,
       {this.drawTick,
       this.idleColor = Colors.red,
       this.movingColor = Colors.redAccent,
@@ -46,12 +47,25 @@ class LoadingDotsPainter extends CustomPainter {
     // Draw a circle that circumscribes the arrow.
     paint.style = PaintingStyle.fill;
 
+
+    // List<Color> colors = [Colors.red, Colors.black87, Colors.purple, Colors.brown, Colors.grey, Colors.greenAccent, Colors.yellow];
+
+    int shapeCount = 0;
+
+    dotSystem.shape.forEach((Vector2 point) {
+
+      shapeCount++;
+      canvas.drawCircle(offsetFromVector(center + point), radius, indicator);
+      TextSpan span = new TextSpan(style: new TextStyle(color: Colors.blue[800]), text: shapeCount.toString());
+      TextPainter tp = new TextPainter(text: span, textAlign: TextAlign.left, textDirection: TextDirection.ltr);
+      tp.layout();
+      tp.paint(canvas, offsetFromVector(center + point));
+    });
+
     int count = 0;
-    List<Color> colors = [Colors.red, Colors.black87, Colors.purple, Colors.brown, Colors.grey, Colors.greenAccent, Colors.yellow];
 
     dotPositions.forEach((PhysicsDot dot) {
-
-      paint.color = colors[count];
+      // paint.color = colors[count];
 
       count++;
       int distance = dot.velocity.length.abs().floor();
@@ -64,10 +78,10 @@ class LoadingDotsPainter extends CustomPainter {
         canvas.drawCircle(offsetFromVector(finalPosition), radius, paint);
       }
 
-      int attractedDistance =
+    int attractedDistance =
           (dot.attractedPoint - dot.position).length.abs().floor();
 
-      for (int i = 1; i < attractedDistance; ++i) {
+/*      for (int i = 1; i < attractedDistance; ++i) {
         Vector2 addedPosition =
             ((dot.position - dot.attractedPoint) * (i / attractedDistance));
         Vector2 finalPosition = center + (dot.position - addedPosition);
@@ -76,10 +90,14 @@ class LoadingDotsPainter extends CustomPainter {
         canvas.drawCircle(offsetFromVector(finalPosition), radius, attractedIndicator);
       }
 
-      canvas.drawCircle(offsetFromVector(center + dot.attractedPoint), radius, indicator);
+      canvas.drawCircle(offsetFromVector(center + dot.attractedPoint), radius, indicator);*/
 
       canvas.drawCircle(offsetFromVector(center + dot.position), radius, paint);
 
+      /*TextSpan span = new TextSpan(style: new TextStyle(color: Colors.blue[800]), text: count.toString());
+      TextPainter tp = new TextPainter(text: span, textAlign: TextAlign.left, textDirection: TextDirection.ltr);
+      tp.layout();
+      tp.paint(canvas, offsetFromVector(center + dot.position));*/
     });
 
     paint.color = movingColor;
@@ -112,7 +130,7 @@ class LoadingDotsPainter extends CustomPainter {
 
 class LoadingDots extends StatefulWidget {
   final TickerProvider tickerProvider;
-  final int dotCount = 3;
+  final int dotCount = 9;
   double padding = 10.0;
   double radius = 50;
 
@@ -128,6 +146,12 @@ class _LoadingDotsState extends State<LoadingDots> with WidgetsBindingObserver {
   DotSystem dotSystem;
   Ticker ticker;
 
+  double lowerBoundY;
+  double upperBoundY;
+
+  double lowerBoundX;
+  double upperBoundX;
+
   LoadingDotsPainter loadingDotsPainter;
   bool isCircle = true;
 
@@ -135,6 +159,14 @@ class _LoadingDotsState extends State<LoadingDots> with WidgetsBindingObserver {
   void initState() {
     // TODO: implement initState
     super.initState();
+
+    lowerBoundY = -300;
+    upperBoundY = 300;
+
+    lowerBoundX =
+        -100 + (-(widget.padding * widget.dotCount) / 2) - widget.padding;
+    upperBoundX =
+        100 + ((widget.padding * widget.dotCount) / 2) + widget.padding;
 
     WidgetsBinding.instance.addObserver(this);
 
@@ -151,7 +183,7 @@ class _LoadingDotsState extends State<LoadingDots> with WidgetsBindingObserver {
     ticker.start();
 
     loadingDotsPainter =
-        new LoadingDotsPainter(dotPositions, drawTick: drawTick);
+        new LoadingDotsPainter(dotPositions, dotSystem, drawTick: drawTick);
   }
 
   List<PhysicsDot> _createDotPositions(double padding, int dotCount) {
@@ -161,29 +193,85 @@ class _LoadingDotsState extends State<LoadingDots> with WidgetsBindingObserver {
 
     List<Vector2> shape = [];
 
-    for (int i = 0; i < dotCount; i++) {
-      shape.add(Matrix2.rotation((i.toDouble() / dotCount) * 2 * pi)
+    int shapeSize = widget.dotCount * 15;
+
+    Random random = Random();
+
+    for (int i = 0; i < shapeSize; i++) {
+      shape.add(Matrix2.rotation((i.toDouble() / shapeSize) * 2 * pi)
           .transform(top.clone()));
-      // Vector2(i * padding - ((dotCount - 1) * padding / 2), 0);
+
+/*      double posX =
+          random.nextDouble() * (upperBoundX - lowerBoundX) + lowerBoundX;
+      double posY =
+          random.nextDouble() * (upperBoundY - lowerBoundY) + lowerBoundY;
+      shape.add(Vector2(posX, posY));*/
 
     }
 
-
-    dotSystem = DotSystem(cycleProgress: 0, shape: shape, positions: [0, 1/3, 2/3], movementBehavior: DotSystemMovementBehavior.static);
+    dotSystem = DotSystem(
+        cycleProgress: 0,
+        shape: _checkMarkShape(),
+        positions: _fillSpacedPositions(widget.dotCount),
+        movementBehavior: DotSystemMovementBehavior.static);
 
     List<Vector2> pointPositions = dotSystem.pointPositions;
 
-    for(Vector2 position in pointPositions) {
-      dots.add(new PhysicsDot(position, Vector2.zero(),
-          attractedPoint: position));
+    for (Vector2 position in pointPositions) {
+      dots.add(
+          new PhysicsDot(position, Vector2.zero(), attractedPoint: position));
     }
     return dots;
+  }
+
+  List<double> _fillSpacedPositions(int count) {
+    if (count < 1) {
+      throw Exception("Can't create an empty spaced positions list");
+    }
+    List<double> values = [];
+    for (int i = 0; i <= count-1; i++) {
+      values.add(i / (count-1));
+    }
+    return values;
+  }
+
+  List<Vector2> _checkMarkShape() {
+    double spacing = 15;
+
+    List<Vector2> values = [
+      Vector2(-spacing, 0),
+      Vector2(0, spacing),
+      Vector2(spacing, 0),
+      Vector2(spacing * 2, -spacing),
+      Vector2(spacing * 3, -spacing * 2),
+    ];
+
+    int shapeSize = widget.dotCount * 15;
+
+    Vector2 top = Vector2(0, -widget.radius);
+
+
+    List<Vector2> circle = [];
+/*
+    for (int i = 0; i < shapeSize; i++) {
+      circle.add(Matrix2.rotation((i.toDouble() / shapeSize) * 2 * pi)
+          .transform(top.clone()));
+
+    }*/
+
+    circle.addAll(values);
+
+    return circle;
   }
 
   _updateDots(Duration elapsed) {
     double delta =
         (elapsed - (lastElapsed ?? elapsed)).inMilliseconds / (1000 / 30);
     lastElapsed = elapsed;
+
+    if (delta > 10) {
+      delta = 0;
+    }
 
     double decay = (1 - (0.2 * delta));
     double hitDecay = (1 - (0.2 * delta));
@@ -193,13 +281,17 @@ class _LoadingDotsState extends State<LoadingDots> with WidgetsBindingObserver {
 
     List<PhysicsDot> positions = dotPositions;
 
-    double lowerBoundY = -300;
-    double upperBoundY = 300;
+    dotSystem = dotSystem.advance(delta / 25);
 
-    double lowerBoundX =
-        -100 + (-(widget.padding * widget.dotCount) / 2) - widget.padding;
-    double upperBoundX =
-        100 + ((widget.padding * widget.dotCount) / 2) + widget.padding;
+    List<Vector2> pointPositions = dotSystem.pointPositions;
+
+/*    if(pointPositions.length != positions.length) {
+      print('');
+    }*/
+
+    for (int i = 0; i < pointPositions.length; i++) {
+      positions[i] = positions[i].withAttractedPoint(pointPositions[i]);
+    }
 
     for (int i = 0; i < widget.dotCount; i++) {
       PhysicsDot dot = positions[i];
@@ -234,13 +326,6 @@ class _LoadingDotsState extends State<LoadingDots> with WidgetsBindingObserver {
         dot = dot.withJump(Duration.zero);
       }
 
-      dotSystem = dotSystem.advance(delta/1000);
-
-      List<Vector2> pointPositions = dotSystem.pointPositions;
-
-      for(int i = 0; i < pointPositions.length; i++) {
-        positions[i] = positions[i].withAttractedPoint(pointPositions[i]);
-      }
       // Rotate if circle
 /*
       if (isCircle) {
@@ -438,7 +523,9 @@ class DotSystem {
   List<Vector2> get pointPositions {
     double totalDistance = 0.0;
 
-    for (int i = 0; i < shape.length; i++) {
+    int shapeLength = movementBehavior == DotSystemMovementBehavior.cycle ? shape.length: shape.length-1;
+
+    for (int i = 0; i < shapeLength; i++) {
       Vector2 point = shape[i];
       // Wrap around to the end
       Vector2 nextPoint = shape[(i + 1)%shape.length];
@@ -450,24 +537,28 @@ class DotSystem {
     List<Vector2> pointPositions = [];
 
     for (int i = 0; i < positions.length; i++) {
-
       double position = positions[i];
-      double nextPosition = i < positions.length - 1 ? positions[(i+1)] : (1+positions[0]);
+      double nextPosition = positions[(i + 1) % positions.length];
 
-      double animationPosition = (position+((nextPosition-position).abs()*cycleProgress));
+      double animationPosition = (position +
+          (nextPosition > position
+                  ? (nextPosition - position)
+                  : ((nextPosition + 1) - position) % 1) *
+              cycleProgress);
 
       double totalLinearPosition = animationPosition * totalDistance;
 
-      if(i == 0) {
+/*      if(i == 0) {
         print("Position $position");
         print("NextPos $nextPosition");
         print("AnimationPos $animationPosition");
-      }
-
+        print("");
+      }*/
+      Vector2 finalPointPosition;
       double distanceCounted = 0;
       for (int d = 0; d < shape.length; d++) {
         Vector2 point = shape[d];
-        Vector2 nextPoint = shape[(d + 1)%shape.length];
+        Vector2 nextPoint = shape[(d + 1) % shape.length];
 
         double distance = point.distanceTo(nextPoint);
         distanceCounted += distance;
@@ -476,24 +567,30 @@ class DotSystem {
             (totalLinearPosition - (distanceCounted - distance)) / distance;
 
         if (distanceCounted >= totalLinearPosition) {
-
-
-          Vector2 pointPosition = point + ((nextPoint-point)*relativeDistance);
-          pointPositions.add(pointPosition);
+          Vector2 pointPosition =
+              point + ((nextPoint - point) * relativeDistance);
+          finalPointPosition = pointPosition;
           break;
-        } else if (distanceCounted == totalDistance && totalLinearPosition > totalDistance) {
+        } /*else if (distanceCounted == totalDistance && totalLinearPosition > totalDistance) {
 
           Vector2 pointPosition = nextPoint;
           pointPositions.add(pointPosition);
           break;
-        }
+        }*/
+      }
+      pointPositions.add(finalPointPosition);
+      if(finalPointPosition == null) {
+        print("woah");
       }
     }
     return pointPositions;
   }
 
   DotSystem advance(double delta) {
-    if(positions == null) {
+    if (movementBehavior == DotSystemMovementBehavior.static) {
+      return this;
+    }
+    if (positions == null) {
       throw Exception("Can't advance an empty DotSystem.");
     }
 
@@ -501,10 +598,10 @@ class DotSystem {
 
     double newValue = (cycleProgress + delta);
 
-    if(newValue >= 1) {
-/*      updatedPositions.insert(updatedPositions.length, updatedPositions.first);
-      updatedPositions.removeAt(0);*/
-      // newValue = 0;
+    if (newValue >= 1) {
+      updatedPositions.insert(updatedPositions.length, updatedPositions.first);
+      updatedPositions.removeAt(0);
+      newValue = 0;
     }
 
     return DotSystem(
@@ -517,7 +614,7 @@ class DotSystem {
 
   DotSystem withPositions(List<double> positions) {
     return DotSystem(
-      cycleProgress: cycleProgress,
+        cycleProgress: cycleProgress,
         origin: origin,
         shape: shape,
         positions: positions,
